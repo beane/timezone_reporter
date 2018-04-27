@@ -9,8 +9,9 @@
 
 # exit statuses:
 # 1 - provided illegal arguments
-# 2 - provided duplicate arguments
-# 3 - provided too few arguments
+# 3 - provided duplicate arguments
+# 4 - provided too few arguments
+# 5 - display timezone not found in /usr/share/zoneinfo/
 # as always, please see the specific error message
 
 # --now
@@ -19,10 +20,13 @@
 # --in
 # --display
 
+# pipelines don't automatically fail if a component fails
+# needed for find | head -n1 calls that don't find anything
+set +o pipefail
 set -o errexit
 
 echo_error() {
-  echo "$1" >&2
+  echo "$1" 1>&2
 }
 
 TEMP=`getopt -o i:nhw:d: --long in:,now,here,when:,display: -n "$0" -- "$@"`
@@ -32,18 +36,26 @@ unset TEMP
 while true ; do
   case "$1" in
     -i|--in)
-      [ -n "$IN" ] && echo_error "cannot use --in more than once" && exit 2
+      [ -n "$IN" ] && echo_error "cannot use --in more than once" && exit 3
       IN="$2"
       shift 2
       ;;
     -n|--now) NOW="now" ; shift ;;
     -h|--here) HERE="here" ; shift ;;
     -w|--when)
-      [ -n "$TIME" ] && echo_error "cannot use --when more than once" && exit 2
+      [ -n "$TIME" ] && echo_error "cannot use --when more than once" && exit 3
       TIME=$2
       shift 2
       ;;
-    -d|--display) DISPLAY="$2" ; shift 2 ;; #TODO: accept multiple dislpay TZs
+    -d|--display)
+      #TODO: accept multiple dislpay TZs
+      if [ -z "$DISPLAYS" ]; then
+        DISPLAYS="$2"
+      else
+        DISPLAYS="$DISPLAYS,$2"
+      fi
+      shift 2
+      ;;
     --) shift ; break ;;
     *) echo_error "stop providing garbage arguments ($1)" ; exit 1 ;;
   esac
@@ -56,7 +68,7 @@ if [ -n "$HERE" ]; then
     IN="$(head -n1 /etc/timezone)"
   else
     echo_error "cannot use --here / --in more than once"
-    exit 2
+    exit 3
   fi
 fi
 
@@ -65,14 +77,27 @@ if [ -n "$NOW" ]; then
     TIME="$(date --date "TZ=\"$IN\" $(date +"%b %e %T")")"
   else
     echo_error "cannot use --now / --when more than once"
-    exit 2
+    exit 3
   fi
 fi
 
-[ -z "$IN" ] && echo_error "must provide either --in <timezone> or --here" && exit 3
-[ -z "$TIME" ] && echo_error "must provide either --when <datetime> or --now" && exit 3
-[ -z "$DISPLAYS" ] && echo_error "must provide --display" && exit 3
+[ -z "$IN" ] && echo_error "must provide either --in <timezone> or --here" && exit 4
+[ -z "$TIME" ] && echo_error "must provide either --when <datetime> or --now" && exit 4
+[ -z "$DISPLAYS" ] && echo_error "must provide --display" && exit 4
 
-echo "What time is it in $DISPLAY when it is $TIME in $IN?"
+TIMEZONES=""
+for display in $(echo $DISPLAYS | tr ',' '\n'); do
+  timezone="$(find /usr/share/zoneinfo/ -iname $(basename $display) -or -ipath "$(basename $display)"  | head -n1)"
+  if [ -z "$timezone" ]; then
+    echo_error "timezone info for \"$display\" not found. perhaps try one of the following:"
+    find /usr/share/zoneinfo/ -iname $(basename "*$display*") -or -ipath "$(basename "*$display*")"
+    exit 4
+  else
+    TIMEZONES="$TIMEZONES,$timezone"
+  fi
+done
 
-TZ=$DISPLAY date --date "TZ=\"$IN\" $TIME" +'%b %e %T %Z'
+for timezone in $(echo $TIMEZONES | tr ',' '\n'); do
+  echo -n "What time is it in $(basename $timezone) when it is $TIME in $IN?: "
+  TZ=$timezone date --date "TZ=\"$IN\" $TIME" +'%b %e %T %Z'
+done
