@@ -20,7 +20,10 @@
 # --display
 
 set -o errexit
-set -o pipefail
+
+echo_error() {
+  echo "$1" >&2
+}
 
 TEMP=`getopt -o i:nhw:d: --long in:,now,here,when:,display: -n "$0" -- "$@"`
 eval set -- "$TEMP"
@@ -29,20 +32,20 @@ unset TEMP
 while true ; do
   case "$1" in
     -i|--in)
-      [ -n "$IN" ] && echo "cannot use --in more than once" && exit 2
+      [ -n "$IN" ] && echo_error "cannot use --in more than once" && exit 2
       IN="$2"
       shift 2
       ;;
     -n|--now) NOW="now" ; shift ;;
     -h|--here) HERE="here" ; shift ;;
     -w|--when)
-      [ -n "$TIME" ] && echo "cannot use --when more than once" && exit 2
+      [ -n "$TIME" ] && echo_error "cannot use --when more than once" && exit 2
       TIME=$2
       shift 2
       ;;
     -d|--display) DISPLAY="$2" ; shift 2 ;; #TODO: accept multiple dislpay TZs
     --) shift ; break ;;
-    *) echo "stop providing garbage arguments ($1)" ; exit 1 ;;
+    *) echo_error "stop providing garbage arguments ($1)" ; exit 1 ;;
   esac
 done
 
@@ -52,7 +55,7 @@ if [ -n "$HERE" ]; then
   if [ -z "$IN" ]; then
     IN="$(head -n1 /etc/timezone)"
   else
-    echo "cannot use --here / --in more than once"
+    echo_error "cannot use --here / --in more than once"
     exit 2
   fi
 fi
@@ -61,14 +64,14 @@ if [ -n "$NOW" ]; then
   if [ -z "$TIME" ]; then
     TIME="$(date --date "TZ=\"$IN\" $(date +"%b %e %T")")"
   else
-    echo "cannot use --now / --when more than once"
+    echo_error "cannot use --now / --when more than once"
     exit 2
   fi
 fi
 
-[ -z "$IN" ] && echo "must provide either --in <timezone> or --here" && exit 3
-[ -z "$TIME" ] && echo "must provide either --when <datetime> or --now" && exit 3
-[ -z "$DISPLAY" ] && echo "must provide --display" && exit 3
+[ -z "$IN" ] && echo_error "must provide either --in <timezone> or --here" && exit 3
+[ -z "$TIME" ] && echo_error "must provide either --when <datetime> or --now" && exit 3
+[ -z "$DISPLAYS" ] && echo_error "must provide --display" && exit 3
 
 echo "What time is it in $DISPLAY when it is $TIME in $IN?"
 
