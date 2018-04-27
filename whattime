@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+# Author: Brian Deane
+# whattime
+# A command that takes a time for a given location to display times in other timezones.
+
+# getopt example stolen from
+# http://bahmanm.com/blogs/command-line-options-how-to-parse-in-bash-using-getopt
+
+# exit statuses:
+# 1 - provided illegal arguments
+# 2 - provided duplicate arguments
+# 3 - provided too few arguments
+# as always, please see the specific error message
+
+# --now
+# --when
+# --here
+# --in
+# --display
+
+set -o errexit
+set -o pipefail
+
+TEMP=`getopt -o i:nhw:d: --long in:,now,here,when:,display: -n "$0" -- "$@"`
+eval set -- "$TEMP"
+unset TEMP
+
+while true ; do
+  case "$1" in
+    -i|--in)
+      [ -n "$IN" ] && echo "cannot use --in more than once" && exit 2
+      IN="$2"
+      shift 2
+      ;;
+    -n|--now) NOW="now" ; shift ;;
+    -h|--here) HERE="here" ; shift ;;
+    -w|--when)
+      [ -n "$TIME" ] && echo "cannot use --when more than once" && exit 2
+      TIME=$2
+      shift 2
+      ;;
+    -d|--display) DISPLAY="$2" ; shift 2 ;; #TODO: accept multiple dislpay TZs
+    --) shift ; break ;;
+    *) echo "stop providing garbage arguments ($1)" ; exit 1 ;;
+  esac
+done
+
+# TODO: coerce IN to legal format
+
+if [ -n "$HERE" ]; then
+  if [ -z "$IN" ]; then
+    IN="$(head -n1 /etc/timezone)"
+  else
+    echo "cannot use --here / --in more than once"
+    exit 2
+  fi
+fi
+
+if [ -n "$NOW" ]; then
+  if [ -z "$TIME" ]; then
+    TIME="$(date --date "TZ=\"$IN\" $(date +"%b %e %T")")"
+  else
+    echo "cannot use --now / --when more than once"
+    exit 2
+  fi
+fi
+
+[ -z "$IN" ] && echo "must provide either --in <timezone> or --here" && exit 3
+[ -z "$TIME" ] && echo "must provide either --when <datetime> or --now" && exit 3
+[ -z "$DISPLAY" ] && echo "must provide --display" && exit 3
+
+echo "What time is it in $DISPLAY when it is $TIME in $IN?"
+
+TZ=$DISPLAY date --date "TZ=\"$IN\" $TIME" +'%b %e %T %Z'
