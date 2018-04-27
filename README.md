@@ -1,14 +1,17 @@
 ## Usage
 ```bash
-whattime --now --tz America/New_York,America/Chicago,America/Los_Angeles
+whattime --now --display new_york,utc
+# TZ=America/New_York date; TZ=Etc/UTC date
 ```
 
 ```bash
-whattime --when '2pm' --in 'new york' --tz America/New_York,America/Chicago,America/Los_Angeles
+whattime --when '2pm' --here --display new_york
+# TZ=America/New_York date -d 'TZ="/usr/share/zoneinfo/<your timezone>" 2pm'
 ```
 
 ```bash
-whattime --when '2pm' --here --tz America/New_York,America/Chicago,America/Los_Angeles
+whattime --when '2pm' --in 'new york' --display chicago
+# TZ=America/Chicago date -d 'TZ="America/New_York" 2pm'
 ```
 
 ## TODO
