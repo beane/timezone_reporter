@@ -29,6 +29,10 @@ echo_error() {
   echo "$1" 1>&2
 }
 
+find_tz() {
+  find /usr/share/zoneinfo/ -iname $(basename $1) -or -ipath "$(basename $1)" | head -n1
+}
+
 TEMP=`getopt -o i:nhw:d: --long in:,now,here,when:,display: -n "$0" -- "$@"`
 eval set -- "$TEMP"
 unset TEMP
@@ -48,7 +52,6 @@ while true ; do
       shift 2
       ;;
     -d|--display)
-      #TODO: accept multiple dislpay TZs
       if [ -z "$DISPLAYS" ]; then
         DISPLAYS="$2"
       else
@@ -60,8 +63,6 @@ while true ; do
     *) echo_error "stop providing garbage arguments ($1)" ; exit 1 ;;
   esac
 done
-
-# TODO: coerce IN to legal format
 
 if [ -n "$HERE" ]; then
   if [ -z "$IN" ]; then
@@ -81,16 +82,15 @@ if [ -n "$NOW" ]; then
   fi
 fi
 
-[ -z "$IN" ] && echo_error "must provide either --in <timezone> or --here" && exit 4
 [ -z "$TIME" ] && echo_error "must provide either --when <datetime> or --now" && exit 4
+[ -z "$IN" ] && echo_error "must provide either --in <timezone> or --here" && exit 4
 [ -z "$DISPLAYS" ] && echo_error "must provide --display" && exit 4
 
 TIMEZONES=""
 for display in $(echo $DISPLAYS | tr ',' '\n'); do
-  timezone="$(find /usr/share/zoneinfo/ -iname $(basename $display) -or -ipath "$(basename $display)"  | head -n1)"
+  timezone="$(find_tz "$display")"
   if [ -z "$timezone" ]; then
-    echo_error "timezone info for \"$display\" not found. perhaps try one of the following:"
-    find /usr/share/zoneinfo/ -iname $(basename "*$display*") -or -ipath "$(basename "*$display*")"
+    echo_error "timezone info for \"$display\" not found."
     exit 4
   else
     TIMEZONES="$TIMEZONES,$timezone"
@@ -98,6 +98,12 @@ for display in $(echo $DISPLAYS | tr ',' '\n'); do
 done
 
 for timezone in $(echo $TIMEZONES | tr ',' '\n'); do
-  echo -n "What time is it in $(basename $timezone) when it is $TIME in $IN?: "
-  TZ=$timezone date --date "TZ=\"$IN\" $TIME" +'%b %e %T %Z'
+  in="$(find_tz "$IN")"
+  if [ -z "$in" ]; then
+    echo_error "timezone info for \"$in\" not found."
+    exit 4
+  fi
+
+  echo -n "What time is it in $(basename $timezone) when it is $TIME in $(basename $in)?: "
+  TZ=$timezone date --date "TZ=\"$in\" $TIME" +'%b %e %T %Z'
 done
